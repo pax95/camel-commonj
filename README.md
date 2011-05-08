@@ -1,4 +1,8 @@
-Camel component that deletages thread management to CommonJ workmanagers.
+Camel component that delegates Camel thread management to CommonJ workmanagers.
+
+Only thread creation that is controlled by Camel will be handled by this component. 
+Libraries that spawn their own threads, will not be wrapped by the Camel workmanager wrapper
+eg. worker threads in the Quarz component.
 
 The Timer and Work Manager API is defined in a specification created jointly by Oracle and IBM. 
 This API enables concurrent programming of EJBs and Servlets within a Java EE application. 
@@ -13,20 +17,18 @@ Spring XML:
         <constructor-arg index="0" ref="camel"/>
         <property name="workmanager">
         	<bean class="org.springframework.jndi.JndiObjectFactoryBean">
-				<property name="jndiName" value="java:comp/myJndiWorkmanager" />
+				<property name="jndiName" value="java:comp/env/myJndiWorkmanager" />
 				<property name="resourceRef" value="true" />
 			</bean>
         </property>
     </bean>
 
-    <camel:camelContext id="camel">
-        <camel:route>
-            <camel:from uri="timer://TestTimer?fixedRate=true&amp;period=60000&amp;delay=30000"/>
-            <camel:to uri="mock:timer"/>
-            <camel:to uri="mock:foo"/>
-        </camel:route>
-     
-    </camel:camelContext>
+ 	<camelContext id="camel" xmlns="http://camel.apache.org/schema/spring">
+        <route>
+            <from uri="direct:foo"/>
+            <to uri="mock:foo"/>
+        </route>
+    </camelContext>     
 
 
 
