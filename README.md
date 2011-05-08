@@ -1,8 +1,7 @@
 Camel component that delegates Camel thread management to CommonJ workmanagers.
 
 Only thread creation that is controlled by Camel will be handled by this component. 
-Libraries that spawn their own threads, will not be wrapped by the Camel workmanager
-eg. worker threads in the Quarz component.
+Libraries that spawn their own threads, will not be wrapped eg. worker threads in the Quarz component.
 
 The Timer and Work Manager API is defined in a specification created jointly by Oracle and IBM. 
 This API enables concurrent programming of EJBs and Servlets within a Java EE application. 
