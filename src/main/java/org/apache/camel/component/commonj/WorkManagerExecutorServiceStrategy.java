@@ -16,14 +16,24 @@
  */
 package org.apache.camel.component.commonj;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.impl.DefaultExecutorServiceStrategy;
+import org.apache.camel.impl.DefaultShutdownStrategy;
+import org.apache.camel.model.OptionalIdentifiedDefinition;
+import org.apache.camel.model.ProcessorDefinition;
+import org.apache.camel.model.ProcessorDefinitionHelper;
+import org.apache.camel.model.RouteDefinition;
+import org.apache.camel.spi.LifecycleStrategy;
 import org.apache.camel.util.ObjectHelper;
+import org.apache.camel.util.concurrent.ExecutorServiceHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,10 +45,18 @@ public class WorkManagerExecutorServiceStrategy extends DefaultExecutorServiceSt
 
     private static final Logger LOG = LoggerFactory.getLogger(WorkManagerExecutorServiceStrategy.class);
 
+    // TODO Can be removed when camel-core
+    // DefaultExecutorServiceStrategy.onThreadPoolCreated changes scope to
+    // protected
+    private final List<ExecutorService> executorServices = new ArrayList<ExecutorService>();
+    private final CamelContext camelContext;
+
     public WorkManagerExecutorServiceStrategy(CamelContext context) {
         super(context);
+        this.camelContext = context;
     }
 
+    @Override
     public ExecutorService newCachedThreadPool(Object source, String name) {
         ExecutorService answer = WorkManagerExecutorServiceHelper.newCachedThreadPool(getThreadNamePattern(), name, true);
         onThreadPoolCreated(answer, source, getDefaultThreadPoolProfile().getId());
@@ -46,6 +64,7 @@ public class WorkManagerExecutorServiceStrategy extends DefaultExecutorServiceSt
         return answer;
     }
 
+    @Override
     public ScheduledExecutorService newScheduledThreadPool(Object source, String name, int poolSize) {
         ScheduledExecutorService answer = WorkManagerExecutorServiceHelper.newScheduledThreadPool(poolSize, getThreadNamePattern(), name, true);
         onThreadPoolCreated(answer, source, getDefaultThreadPoolProfile().getId());
@@ -53,6 +72,7 @@ public class WorkManagerExecutorServiceStrategy extends DefaultExecutorServiceSt
         return answer;
     }
 
+    @Override
     public ExecutorService newFixedThreadPool(Object source, String name, int poolSize) {
         ExecutorService answer = WorkManagerExecutorServiceHelper.newFixedThreadPool(poolSize, getThreadNamePattern(), name, true);
         onThreadPoolCreated(answer, source, getDefaultThreadPoolProfile().getId());
@@ -60,14 +80,21 @@ public class WorkManagerExecutorServiceStrategy extends DefaultExecutorServiceSt
         return answer;
     }
 
+    @Override
     public ExecutorService newSingleThreadExecutor(Object source, String name) {
-        ExecutorService answer = WorkManagerExecutorServiceHelper.newSingleThreadExecutor(getThreadNamePattern(), name, true);
+        ExecutorService answer;
+        if (source instanceof DefaultShutdownStrategy) {
+            answer = ExecutorServiceHelper.newSingleThreadExecutor(getThreadNamePattern(), name, true);
+        } else {
+            answer = WorkManagerExecutorServiceHelper.newSingleThreadExecutor(getThreadNamePattern(), name, true);
+        }
         onThreadPoolCreated(answer, source, getDefaultThreadPoolProfile().getId());
 
         LOG.debug("Created new single thread pool for source: " + source + " with name: " + name + ". -> " + answer);
         return answer;
     }
 
+    @Override
     public ExecutorService newThreadPool(Object source, String name, int corePoolSize, int maxPoolSize) {
         ExecutorService answer = WorkManagerExecutorServiceHelper.newThreadPool(getThreadNamePattern(), name, corePoolSize, maxPoolSize);
         onThreadPoolCreated(answer, source, getDefaultThreadPoolProfile().getId());
@@ -76,6 +103,7 @@ public class WorkManagerExecutorServiceStrategy extends DefaultExecutorServiceSt
         return answer;
     }
 
+    @Override
     public ExecutorService newThreadPool(Object source, String name, int corePoolSize, int maxPoolSize, long keepAliveTime, TimeUnit timeUnit, int maxQueueSize,
                                          RejectedExecutionHandler rejectedExecutionHandler, boolean daemon) {
         // the thread name must not be null
@@ -88,6 +116,58 @@ public class WorkManagerExecutorServiceStrategy extends DefaultExecutorServiceSt
                   + keepAliveTime + " " + timeUnit + ", maxQueueSize=" + maxQueueSize + ", rejectedExecutionHandler=" + rejectedExecutionHandler + ", daemon=" + daemon + "] -> "
                   + answer);
         return answer;
+    }
+
+    // TODO Can be removed when camel-core
+    // DefaultExecutorServiceStrategy.onThreadPoolCreated changes scope to
+    // protected
+    private void onThreadPoolCreated(ExecutorService executorService, Object source, String threadPoolProfileId) {
+        // add to internal list of thread pools
+        executorServices.add(executorService);
+
+        String id;
+        String sourceId = null;
+        String routeId = null;
+
+        // extract id from source
+        if (source instanceof OptionalIdentifiedDefinition) {
+            id = ((OptionalIdentifiedDefinition)source).idOrCreate(camelContext.getNodeIdFactory());
+            // and let source be the short name of the pattern
+            sourceId = ((OptionalIdentifiedDefinition)source).getShortName();
+        } else if (source instanceof String) {
+            id = (String)source;
+        } else if (source != null) {
+            // fallback and use the simple class name with hashcode for the id
+            // so its unique for this given source
+            id = source.getClass().getSimpleName() + "(" + ObjectHelper.getIdentityHashCode(source) + ")";
+        } else {
+            // no source, so fallback and use the simple class name from thread
+            // pool and its hashcode identity so its unique
+            id = executorService.getClass().getSimpleName() + "(" + ObjectHelper.getIdentityHashCode(executorService) + ")";
+        }
+
+        // id is mandatory
+        ObjectHelper.notEmpty(id, "id for thread pool " + executorService);
+
+        // extract route id if possible
+        if (source instanceof ProcessorDefinition) {
+            RouteDefinition route = ProcessorDefinitionHelper.getRoute((ProcessorDefinition)source);
+            if (route != null) {
+                routeId = route.idOrCreate(camelContext.getNodeIdFactory());
+            }
+        }
+
+        // let lifecycle strategy be notified as well which can let it be
+        // managed in JMX as well
+        if (executorService instanceof ThreadPoolExecutor) {
+            ThreadPoolExecutor threadPool = (ThreadPoolExecutor)executorService;
+            for (LifecycleStrategy lifecycle : camelContext.getLifecycleStrategies()) {
+                lifecycle.onThreadPoolAdd(camelContext, threadPool, id, sourceId, routeId, threadPoolProfileId);
+            }
+        }
+
+        // now call strategy to allow custom logic
+        onNewExecutorService(executorService);
     }
 
     public void setWorkmanager(WorkManager workmanager) {
