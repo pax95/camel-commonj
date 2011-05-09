@@ -36,6 +36,10 @@
 			<groupId>org.apache.camel</groupId>
 			<artifactId>camel-core</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>org.apache.camel</groupId>
+			<artifactId>camel-core-xml</artifactId>
+		</dependency>
 		<!-- for testing -->
         <dependency>
             <groupId>junit</groupId>

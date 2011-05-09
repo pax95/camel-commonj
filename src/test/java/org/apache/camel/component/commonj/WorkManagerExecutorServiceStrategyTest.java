@@ -35,7 +35,7 @@ public class WorkManagerExecutorServiceStrategyTest extends CamelSpringTestSuppo
 
     @Override
     protected AbstractApplicationContext createApplicationContext() {
-        return new ClassPathXmlApplicationContext("CustomExecutorServiceStrategyTest-context.xml");
+		return new ClassPathXmlApplicationContext("CamelContextTest.xml");
     }
 
 }
