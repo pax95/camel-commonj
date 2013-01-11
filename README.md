@@ -10,25 +10,14 @@ This API is often referred to as CommonJ.
 See http://download.oracle.com/docs/cd/E12840_01/wls/docs103/commonj/commonj.html
 
 To activate thread management using JEE container workmanagers do :  
-Spring XML:
+Spring XML: 
 
-	<bean id="workmanagerExecutor" depends-on="camel" class="org.apache.camel.component.commonj.WorkManagerExecutorServiceStrategy">
-        <constructor-arg index="0" ref="camel"/>
-        <property name="workmanager">
-        	<bean class="org.springframework.jndi.JndiObjectFactoryBean">
-				<property name="jndiName" value="java:comp/env/myJndiWorkmanager" />
-				<property name="resourceRef" value="true" />
-			</bean>
-        </property>
-    </bean>
-
- 	<camelContext id="camel" xmlns="http://camel.apache.org/schema/spring">
-        <route>
-            <from uri="direct:foo"/>
-            <to uri="mock:foo"/>
-        </route>
-    </camelContext>     
-
-
-
-
+<bean id="workmanager" class="org.springframework.jndi.JndiObjectFactoryBean">
+	<!-- note that the JNDI location of the workmangager to use is server and configuration specific-->
+	<property name="jndiName" value="wm/default" />
+	<property name="resourceRef" value="true" />
+</bean>
+  
+<bean id="workmanagerThreadPoolFactoryBean" class="org.apache.camel.component.commonj.WorkManagerThreadPoolFactory">
+	<property name="workmanager" ref="workmanager"/>
+</bean>
