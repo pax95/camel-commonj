@@ -24,7 +24,7 @@
 	<name>Camel :: CommonJ</name>
 	<description>A Camel wrapper for CommonJ workmanagers</description>
 	<properties>
-		<camel.version>2.10.3</camel.version>
+		<camel.version>3.4.2</camel.version>
 	</properties>
 	<dependencies>
 		<dependency>
